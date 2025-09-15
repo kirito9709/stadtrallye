@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>Stadtrallye Ranking</title>
+  <style>
+    body { font-family: sans-serif; margin: 30px; }
+    #loginBox { position: fixed; top: 16px; right: 16px; }
+    #adminPanel { display: none; margin-bottom: 24px; }
+    .hidden { display: none; }
+    table { border-collapse: collapse; margin-bottom: 20px; width: 100%; max-width: 600px; }
+    th, td { border: 1px solid #aaa; padding: 8px; text-align: center; }
+    th { background: silver; }
+    .right { float: right; }
+    .tablesWrapper {
+      display: flex;
+      gap: 30px;
+      flex-wrap: wrap;
+    }
+    .rankingWrapper {
+      flex: 1 1 300px;
+    }
+  </style>
+</head>
+<body>
+  <div id="loginBox">
+    <button id="loginBtn">Admin Login</button>
+  </div>
+  <div id="adminPanel">
+    <strong>Admin-Modus aktiv</strong>
+    <button id="logoutBtn" class="right">Logout</button>
+  </div>
+
+  <div class="tablesWrapper">
+    <div class="rankingWrapper">
+      <h2>Ranking-Liste</h2>
+      <table id="rankingTable">
+        <thead><tr><th>Platz</th><th>Teamname</th><th>Punkte</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="rankingWrapper">
+      <h2>Bonuspunkte</h2>
+      <table id="bonusTable">
+        <thead><tr><th>Platz</th><th>Teamname</th><th>Bonuspunkte</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="rankingWrapper">
+      <h2>Gesamt-Ranking (Punkte + Bonuspunkte)</h2>
+      <table id="gesamtTable">
+        <thead><tr><th>Platz</th><th>Teamname</th><th>Gesamtpunkte</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="adminControls" class="hidden">
+
+    <h3>Punkte-Erfassung Team vs. Team</h3>
+    <form id="scoreForm">
+      <table>
+        <tr>
+          <td>
+            <select id="teamA"></select>
+          </td>
+          <td>
+            <input type="number" id="pointsA" min="0" value="0" style="width:60px;">
+          </td>
+          <td>
+            <input type="number" id="pointsB" min="0" value="0" style="width:60px;">
+          </td>
+          <td>
+            <select id="teamB"></select>
+          </td>
+          <td>
+            <button type="submit">Punkte zuweisen</button>
+          </td>
+        </tr>
+      </table>
+    </form>
+
+    <h3>Bonuspunkte erfassen</h3>
+    <form id="bonusForm">
+      <table>
+        <tr>
+          <td>
+            <select id="bonusTeam"></select>
+          </td>
+          <td>
+            <input type="number" id="bonusPoints" min="0" value="0" style="width:80px;">
+          </td>
+          <td>
+            <button type="submit">Bonuspunkte zuweisen</button>
+          </td>
+        </tr>
+      </table>
+    </form>
+
+    <h3>Teamnamen verwalten (nur Admin)</h3>
+    <div id="teamEditor">
+      <ol id="teamList"></ol>
+      <input type="text" id="newTeamName" placeholder="Neues Team" />
+      <button id="addTeamBtn">Team hinzufügen</button>
+    </div>
+
+  </div>
+
+<script>
+  let teams = [];
+  let scores = {}; // normale Punkte
+  let bonusScores = {}; // Bonuspunkte
+
+  // Initiale Teams eintragen:
+  for (let i = 1; i <= 14; i++) {
+    const t = 'Team ' + i;
+    teams.push(t);
+    scores[t] = 0;
+    bonusScores[t] = 0;
+  }
+
+  const loginBtn = document.getElementById('loginBtn');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const adminPanel = document.getElementById('adminPanel');
+  const adminControls = document.getElementById('adminControls');
+  const teamEditor = document.getElementById('teamEditor');
+
+  loginBtn.onclick = () => {
+    const u = prompt("Benutzername:");
+    const p = prompt("Passwort:");
+    if (u === "admin" && p === "admin") {
+      adminPanel.style.display = "block";
+      loginBtn.style.display = "none";
+      adminControls.classList.remove('hidden');
+      updateTeamList();
+      updateTeamDropdowns();
+    } else {
+      alert("Falsche Zugangsdaten!");
+    }
+  };
+
+  logoutBtn.onclick = () => {
+    adminPanel.style.display = "none";
+    loginBtn.style.display = "";
+    adminControls.classList.add('hidden');
+  };
+
+  // Teamnamen editieren
+  function updateTeamList() {
+    const list = document.getElementById('teamList');
+    list.innerHTML = '';
+    teams.forEach((t, i) => {
+      const li = document.createElement('li');
+      li.innerHTML = `<input value="${t}" data-idx="${i}" style="width: 160px;"> 
+                      <button onclick="removeTeam(${i})">X</button>`;
+      list.appendChild(li);
+    });
+    document.querySelectorAll('#teamList input').forEach(inp => {
+      inp.onchange = (e) => {
+        const idx = e.target.dataset.idx;
+        const oldName = teams[idx];
+        const newName = e.target.value.trim() || oldName;
+        teams[idx] = newName;
+        if (scores[oldName] !== undefined) {
+          scores[newName] = scores[oldName];
+          delete scores[oldName];
+        }
+        if (bonusScores[oldName] !== undefined) {
+          bonusScores[newName] = bonusScores[oldName];
+          delete bonusScores[oldName];
+        }
+        updateRanking();
+        updateBonusRanking();
+        updateGesamtRanking();
+        updateTeamDropdowns();
+        updateTeamList();
+      };
+    });
+  }
+
+  window.removeTeam = function(idx) {
+    const oldName = teams[idx];
+    teams.splice(idx, 1);
+    delete scores[oldName];
+    delete bonusScores[oldName];
+    updateRanking();
+    updateBonusRanking();
+    updateGesamtRanking();
+    updateTeamDropdowns();
+    updateTeamList();
+  };
+
+  document.getElementById('addTeamBtn').onclick = function () {
+    const tn = document.getElementById('newTeamName').value.trim();
+    if (tn && !teams.includes(tn)) {
+      teams.push(tn);
+      scores[tn] = 0;
+      bonusScores[tn] = 0;
+      updateRanking();
+      updateBonusRanking();
+      updateGesamtRanking();
+      updateTeamDropdowns();
+      updateTeamList();
+      document.getElementById('newTeamName').value = "";
+    }
+  };
+
+  function updateRanking() {
+    const sorted = teams.slice().sort((a, b) => scores[b] - scores[a] || a.localeCompare(b));
+    const tbody = document.querySelector('#rankingTable tbody');
+    tbody.innerHTML = "";
+    sorted.forEach((team, idx) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${idx + 1}</td><td>${team}</td><td>${scores[team]}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function updateBonusRanking() {
+    const sorted = teams.slice().sort((a, b) => bonusScores[b] - bonusScores[a] || a.localeCompare(b));
+    const tbody = document.querySelector('#bonusTable tbody');
+    tbody.innerHTML = "";
+    sorted.forEach((team, idx) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${idx + 1}</td><td>${team}</td><td>${bonusScores[team]}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function updateGesamtRanking() {
+    const gesamtPunkte = {};
+    teams.forEach(t => {
+      gesamtPunkte[t] = (scores[t] || 0) + (bonusScores[t] || 0);
+    });
+    const sorted = teams.slice().sort((a, b) => gesamtPunkte[b] - gesamtPunkte[a] || a.localeCompare(b));
+    const tbody = document.querySelector('#gesamtTable tbody');
+    tbody.innerHTML = "";
+    sorted.forEach((team, idx) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${idx + 1}</td><td>${team}</td><td>${gesamtPunkte[team]}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function updateTeamDropdowns() {
+    const teamASelect = document.getElementById('teamA');
+    const teamBSelect = document.getElementById('teamB');
+    const bonusTeamSelect = document.getElementById('bonusTeam');
+    [teamASelect, teamBSelect, bonusTeamSelect].forEach(sel => {
+      sel.innerHTML = "";
+      teams.forEach(t => {
+        sel.innerHTML += `<option value="${t}">${t}</option>`;
+      });
+    });
+  }
+
+  // Punkte zuweisen - Submit für normale Punkte
+  document.getElementById('scoreForm').onsubmit = function (e) {
+    e.preventDefault();
+    const teamA = document.getElementById('teamA').value;
+    const teamB = document.getElementById('teamB').value;
+    const pointsA = parseInt(document.getElementById('pointsA').value, 10) || 0;
+    const pointsB = parseInt(document.getElementById('pointsB').value, 10) || 0;
+    if (teamA === teamB) {
+      alert("Teams müssen unterschiedlich sein!");
+      return;
+    }
+    scores[teamA] += pointsA;
+    scores[teamB] += pointsB;
+    updateRanking();
+    updateGesamtRanking();
+  };
+
+  // Bonuspunkte zuweisen
+  document.getElementById('bonusForm').onsubmit = function (e) {
+    e.preventDefault();
+    const bonusTeam = document.getElementById('bonusTeam').value;
+    const bonusPoints = parseInt(document.getElementById('bonusPoints').value, 10) || 0;
+    bonusScores[bonusTeam] += bonusPoints;
+    updateBonusRanking();
+    updateGesamtRanking();
+  };
+
+  // Startwerte für Dropdowns und Tabellen aktualisieren
+  updateRanking();
+  updateBonusRanking();
+  updateGesamtRanking();
+  updateTeamDropdowns();
+  updateTeamList();
+</script>
+</body>
+</html>
+
