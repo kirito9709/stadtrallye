@@ -23,25 +23,21 @@
     <strong>Admin-Modus aktiv</strong>
     <button id="logoutBtn" class="right">Logout</button>
   </div>
-
   <h2>Ranking-Liste</h2>
   <table id="rankingTable">
     <thead><tr><th>Platz</th><th>Teamname</th><th>Punkte</th></tr></thead>
     <tbody></tbody>
   </table>
-
   <h3 style="margin-top:40px;">Bonuspunkte</h3>
   <table id="bonusRankingTable">
     <thead><tr><th>Platz</th><th>Teamname</th><th>Bonuspunkte</th></tr></thead>
     <tbody></tbody>
   </table>
-
   <h3 style="margin-top:40px;">Gesamtpunkte (Ranking + Bonus)</h3>
   <table id="totalRankingTable">
     <thead><tr><th>Platz</th><th>Teamname</th><th>Gesamtpunkte</th></tr></thead>
     <tbody></tbody>
   </table>
-
   <!-- Nur für Admins sichtbar -->
   <div id="adminControls" class="hidden">
     <h2>Punkte-Erfassung Ranking Team vs. Team</h2>
@@ -52,10 +48,11 @@
             <select id="teamA"></select>
           </td>
           <td>
-            <input type="number" id="pointsA" min="0" value="0" style="width:60px;">
+            <!-- Minuspunkte durch min="-100" statt min="0" -->
+            <input type="number" id="pointsA" min="-100" value="0" style="width:60px;">
           </td>
           <td>
-            <input type="number" id="pointsB" min="0" value="0" style="width:60px;">
+            <input type="number" id="pointsB" min="-100" value="0" style="width:60px;">
           </td>
           <td>
             <select id="teamB"></select>
@@ -66,7 +63,6 @@
         </tr>
       </table>
     </form>
-
     <h3>Bonuspunkte-Erfassung Team vs. Team</h3>
     <form id="bonusScoreForm">
       <table>
@@ -75,10 +71,10 @@
             <select id="bonusTeamA"></select>
           </td>
           <td>
-            <input type="number" id="bonusPointsA" min="0" value="0" style="width:60px;">
+            <input type="number" id="bonusPointsA" min="-100" value="0" style="width:60px;">
           </td>
           <td>
-            <input type="number" id="bonusPointsB" min="0" value="0" style="width:60px;">
+            <input type="number" id="bonusPointsB" min="-100" value="0" style="width:60px;">
           </td>
           <td>
             <select id="bonusTeamB"></select>
@@ -89,7 +85,6 @@
         </tr>
       </table>
     </form>
-
     <h3>Teamnamen verwalten (nur Admin)</h3>
     <div id="teamEditor">
       <ol id="teamList"></ol>
@@ -97,18 +92,31 @@
       <button id="addTeamBtn">Team hinzufügen</button>
     </div>
   </div>
-
 <script>
-let teams = [];
-let scores = {};       // Ranking Punkte
-let bonusScores = {};  // Bonuspunkte
+// Daten dauerhaft speichern/laden
+function saveData() {
+  localStorage.setItem("teams", JSON.stringify(teams));
+  localStorage.setItem("scores", JSON.stringify(scores));
+  localStorage.setItem("bonusScores", JSON.stringify(bonusScores));
+}
 
-// Initiale Teams anlegen (14 Stück)
-for (let i = 1; i <= 14; i++) {
-  const teamName = 'Team ' + i;
-  teams.push(teamName);
-  scores[teamName] = 0;
-  bonusScores[teamName] = 0;
+// Beim Laden Seite: Daten aus localStorage übernehmen (falls vorhanden)
+let teams = [];
+let scores = {};
+let bonusScores = {};
+if(localStorage.getItem('teams')){
+  teams = JSON.parse(localStorage.getItem('teams'));
+  scores = JSON.parse(localStorage.getItem('scores'));
+  bonusScores = JSON.parse(localStorage.getItem('bonusScores'));
+} else {
+  // Initiale Teams anlegen (14 Stück)
+  for (let i = 1; i <= 14; i++) {
+    const teamName = 'Team ' + i;
+    teams.push(teamName);
+    scores[teamName] = 0;
+    bonusScores[teamName] = 0;
+  }
+  saveData();
 }
 
 const loginBtn = document.getElementById('loginBtn');
@@ -130,13 +138,11 @@ loginBtn.onclick = () => {
     alert("Falsche Zugangsdaten!");
   }
 };
-
 logoutBtn.onclick = () => {
   adminPanel.style.display = "none";
   loginBtn.style.display = "inline-block";
   adminControls.classList.add('hidden');
 };
-
 // Teamnamen editieren & anzeigen
 function updateTeamList() {
   const list = document.getElementById('teamList');
@@ -152,7 +158,6 @@ function updateTeamList() {
       const idx = e.target.dataset.idx;
       const oldName = teams[idx];
       const newName = e.target.value.trim() || oldName;
-
       // Namen ändern und Punkte übertragen
       teams[idx] = newName;
       if(scores[oldName] !== undefined) {
@@ -168,10 +173,10 @@ function updateTeamList() {
       updateTotalRanking();
       updateTeamDropdowns();
       updateTeamList();
+      saveData();
     };
   });
 }
-
 window.removeTeam = function(idx) {
   const oldName = teams[idx];
   teams.splice(idx, 1);
@@ -182,8 +187,8 @@ window.removeTeam = function(idx) {
   updateTotalRanking();
   updateTeamDropdowns();
   updateTeamList();
+  saveData();
 };
-
 document.getElementById('addTeamBtn').onclick = function() {
   const tn = document.getElementById('newTeamName').value.trim();
   if (tn && !teams.includes(tn)) {
@@ -196,9 +201,9 @@ document.getElementById('addTeamBtn').onclick = function() {
     updateTeamDropdowns();
     updateTeamList();
     document.getElementById('newTeamName').value = "";
+    saveData();
   }
 };
-
 // Ranking Tabelle aktualisieren
 function updateRanking() {
   const sorted = teams.slice().sort((a,b) => scores[b] - scores[a] || a.localeCompare(b));
@@ -209,8 +214,8 @@ function updateRanking() {
     tr.innerHTML = `<td>${idx+1}</td><td>${team}</td><td>${scores[team]}</td>`;
     tbody.appendChild(tr);
   });
+  saveData();
 }
-
 // Bonus Ranking Tabelle aktualisieren
 function updateBonusRanking() {
   const sorted = teams.slice().sort((a,b) => bonusScores[b] - bonusScores[a] || a.localeCompare(b));
@@ -221,8 +226,8 @@ function updateBonusRanking() {
     tr.innerHTML = `<td>${idx+1}</td><td>${team}</td><td>${bonusScores[team]}</td>`;
     tbody.appendChild(tr);
   });
+  saveData();
 }
-
 // Gesamtranking Tabelle (Summe)
 function updateTotalRanking() {
   // Punkte addieren und sortieren
@@ -238,8 +243,8 @@ function updateTotalRanking() {
     tr.innerHTML = `<td>${idx+1}</td><td>${team}</td><td>${totalPoints[team]}</td>`;
     tbody.appendChild(tr);
   });
+  saveData();
 }
-
 // Dropdowns für Punktevergabe aktualisieren (jeweils Ranking und Bonus)
 function updateTeamDropdowns() {
   const selectors = ['teamA', 'teamB', 'bonusTeamA', 'bonusTeamB'];
@@ -250,8 +255,8 @@ function updateTeamDropdowns() {
       select.innerHTML += `<option value="${t}">${t}</option>`;
     });
   });
+  saveData();
 }
-
 // Punktevergabe Formular Aktionen (Ranking)
 document.getElementById('scoreForm').onsubmit = function(e) {
   e.preventDefault();
@@ -267,8 +272,8 @@ document.getElementById('scoreForm').onsubmit = function(e) {
   scores[teamB] += pointsB;
   updateRanking();
   updateTotalRanking();
+  saveData();
 };
-
 // Punktevergabe Formular Aktionen (Bonus)
 document.getElementById('bonusScoreForm').onsubmit = function(e) {
   e.preventDefault();
@@ -284,8 +289,8 @@ document.getElementById('bonusScoreForm').onsubmit = function(e) {
   bonusScores[teamB] += pointsB;
   updateBonusRanking();
   updateTotalRanking();
+  saveData();
 };
-
 // Initial render
 updateRanking();
 updateBonusRanking();
@@ -295,6 +300,7 @@ updateTeamDropdowns();
 </script>
 </body>
 </html>
+
 
 
 
